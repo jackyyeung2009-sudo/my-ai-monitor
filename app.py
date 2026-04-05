@@ -1,63 +1,63 @@
 import streamlit as st
 import pandas as pd
-import plotly.graph_objects as go
+import requests
+from bs4 import BeautifulSoup
 from datetime import datetime
+import plotly.graph_objects as go
 
-# 1. 時空握手 - 設定介面
-st.set_page_config(page_title="AI 算力中心 - 勢位態監控", layout="wide")
-st.title("🚀 AI 新貴實時監控系統")
-st.write(f"當前時間: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} (AEST/HKT 同步)")
+# 1. 時空握手 & 頁面設定
+st.set_page_config(page_title="AI 算力中心", layout="wide")
+st.title("🚀 AI 新貴：勢位態實時監控系統")
+st.write(f"系統時間: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} (對齊 AEST/HKT)")
 
-# 2. 核心數據模擬 (實際運行時可對接 aastock 爬蟲)
-def get_live_data():
-    # 這裡預填你提到的 2513 與 100 數據
-    data = {
-        '代碼': ['02513', '00100', '09988', '00700'],
-        '名稱': ['智譜 AI', 'MiniMax-W', '阿里巴巴', '騰訊控股'],
-        '現價': [779.0, 949.5, 92.4, 385.2],
-        '資金流向(億)': [-13.6, 6.8, 5.1, -1.8],
-        'LEGO狀態': ['疊磚中', '向上突破', '方塊底', '整固中']
-    }
-    return pd.DataFrame(data)
+# 2. 實時抓取引擎
+def get_stock_price(ticker):
+    try:
+        url = f"http://www.aastocks.com/tc/stocks/analysis/stock-quote-details.aspx?stock={ticker}"
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        r = requests.get(url, headers=headers, timeout=5)
+        soup = BeautifulSoup(r.text, 'html.parser')
+        # 抓取現價 (對標 aastock 結構)
+        price = soup.find('div', {'class': 'lastPrice'}).text.strip().replace(',', '')
+        return float(price)
+    except:
+        return None
 
-# 3. LEGO 形態繪圖引擎
-def draw_lego_chart(stock_name, price):
-    # 模擬 K 線數據
-    df_k = pd.DataFrame({
-        'Date': pd.date_range(start='2026-03-20', periods=15),
-        'Open': [price-10]*15,
-        'High': [price+5]*15,
-        'Low': [price-15]*15,
-        'Close': [price]*15
-    })
+# 3. 數據處理邏輯 (智譜 2513 / MiniMax 100)
+def load_dashboard():
+    stocks = [
+        {"id": "02513", "name": "智譜 AI", "lego_base": 760, "lego_top": 850},
+        {"id": "00100", "name": "MiniMax-W", "lego_base": 920, "lego_top": 980}
+    ]
     
-    fig = go.Figure(data=[go.Candlestick(x=df_k['Date'],
-                open=df_k['Open'], high=df_k['High'],
-                low=df_k['Low'], close=df_k['Close'], name='K線')])
+    results = []
+    for s in stocks:
+        current = get_stock_price(s['id'])
+        if current:
+            # 判定形態 (態)
+            status = "突破中" if current > s['lego_top'] else ("破位" if current < s['lego_base'] else "疊磚中")
+            results.append({
+                "代碼": s['id'], "名稱": s['name'], "實時價": current, 
+                "方塊底部": s['lego_base'], "狀態": status, "更新": datetime.now().strftime('%H:%M:%S')
+            })
+    return pd.DataFrame(results)
 
-    # 注入 LEGO 方塊 (Sky Sir 邏輯：窄幅橫盤區)
-    fig.add_shape(type="rect",
-        x0=df_k['Date'].iloc[5], y0=price-20, x1=df_k['Date'].iloc[14], y1=price+20,
-        line=dict(color="Gold", width=2),
-        fillcolor="LightYellow", opacity=0.2, name="LEGO 方塊"
-    )
-    
-    fig.update_layout(title=f"{stock_name} - LEGO 形態偵測", template="plotly_dark")
-    return fig
-
-# 4. APP 佈局
-col1, col2 = st.columns([1, 2])
+# 4. 畫面呈現
+col1, col2 = st.columns([1, 1])
 
 with col1:
-    st.subheader("📊 板塊資金實時監控")
-    df = get_live_data()
-    st.dataframe(df.style.map(lambda x: 'color: #ff4d4d' if isinstance(x, float) and x > 0 else 'color: #2ecc71', subset=['資金流向(億)']))
-    
-    selected_stock = st.selectbox("選擇個股查看穿透數據", df['名稱'])
+    st.subheader("📊 實時勢位監控")
+    df = load_dashboard()
+    if not df.empty:
+        # 使用 map 取代 applymap 避免報錯
+        st.dataframe(df.style.map(lambda x: 'color: #2ecc71' if x == "突破中" else ('color: #ff4d4d' if x == "破位" else 'color: #f1c40f'), subset=['狀態']))
+    else:
+        st.warning("等待開市數據流入...")
 
 with col2:
-    current_price = df[df['名稱'] == selected_stock]['現價'].values[0]
-    st.plotly_chart(draw_lego_chart(selected_stock, current_price), use_container_width=True)
+    st.subheader("🔮 玄學與算力提示")
+    st.info("💡 提示：明早 09:30 HKT 智譜若守住 $764，火金磁場轉強，有利疊磚上行。")
 
-# 5. 玄學提示
-st.info("💡 算力備註：目前甲辰年，AI 板塊屬『火金』互煉。智譜 (2513) 方塊底部在 760 附近，守住則勢強。")
+# 自動刷新按鈕
+if st.button('🔄 手動刷新數據'):
+    st.rerun()
