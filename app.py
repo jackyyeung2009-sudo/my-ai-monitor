@@ -5,7 +5,7 @@ from datetime import datetime
 
 # 1. 時空握手 - 設定介面
 st.set_page_config(page_title="AI 算力中心 - 勢位態監控", layout="wide")
-st.title("🚀 Sky Sir 風格：AI 新貴實時監控系統")
+st.title("🚀 AI 新貴實時監控系統")
 st.write(f"當前時間: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} (AEST/HKT 同步)")
 
 # 2. 核心數據模擬 (實際運行時可對接 aastock 爬蟲)
