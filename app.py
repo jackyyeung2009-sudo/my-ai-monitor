@@ -51,7 +51,7 @@ col1, col2 = st.columns([1, 2])
 with col1:
     st.subheader("📊 板塊資金實時監控")
     df = get_live_data()
-    st.dataframe(df.style.applymap(lambda x: 'color: #ff4d4d' if isinstance(x, float) and x > 0 else 'color: #2ecc71', subset=['資金流向(億)']))
+    st.dataframe(df.style.map(lambda x: 'color: #ff4d4d' if isinstance(x, float) and x > 0 else 'color: #2ecc71', subset=['資金流向(億)']))
     
     selected_stock = st.selectbox("選擇個股查看穿透數據", df['名稱'])
 
