@@ -3,61 +3,60 @@ import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
-import plotly.graph_objects as go
 
-# 1. 時空握手 & 頁面設定
-st.set_page_config(page_title="AI 算力中心", layout="wide")
-st.title("🚀 AI 新貴：勢位態實時監控系統")
-st.write(f"系統時間: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} (對齊 AEST/HKT)")
+# 1. 設置 UI
+st.set_page_config(page_title="AI 算力中心-部署版", layout="wide")
+st.title("🛡️ 智譜 & MiniMax：收市分析與明日部署")
 
-# 2. 實時抓取引擎
-def get_stock_price(ticker):
+def get_full_analysis(ticker):
     try:
+        # 抓取 AASTOCKS 報價頁 (獲取現價與今日波幅)
         url = f"http://www.aastocks.com/tc/stocks/analysis/stock-quote-details.aspx?stock={ticker}"
         headers = {'User-Agent': 'Mozilla/5.0'}
         r = requests.get(url, headers=headers, timeout=5)
         soup = BeautifulSoup(r.text, 'html.parser')
-        # 抓取現價 (對標 aastock 結構)
-        price = soup.find('div', {'class': 'lastPrice'}).text.strip().replace(',', '')
-        return float(price)
+        
+        price = float(soup.find('div', {'class': 'lastPrice'}).text.strip().replace(',', ''))
+        
+        # 模擬從歷史表格計算 LEGO 位 (實戰中可進一步抓取歷史分頁)
+        # 這裡設定 2513 與 100 的 2026 年 4 月歷史 LEGO 區間
+        lego_config = {
+            '02513': {'base': 760, 'top': 850, 'support': 764},
+            '00100': {'base': 920, 'top': 980, 'support': 935}
+        }
+        
+        conf = lego_config.get(ticker)
+        status = "突破中" if price > conf['top'] else ("底位疊磚" if price < conf['base'] + 10 else "區間震盪")
+        
+        return {
+            "現價": price,
+            "LEGO方塊底": conf['base'],
+            "LEGO方塊頂": conf['top'],
+            "關鍵支撐": conf['support'],
+            "狀態": status
+        }
     except:
         return None
 
-# 3. 數據處理邏輯 (智譜 2513 / MiniMax 100)
-def load_dashboard():
-    stocks = [
-        {"id": "02513", "name": "智譜 AI", "lego_base": 760, "lego_top": 850},
-        {"id": "00100", "name": "MiniMax-W", "lego_base": 920, "lego_top": 980}
-    ]
-    
-    results = []
-    for s in stocks:
-        current = get_stock_price(s['id'])
-        if current:
-            # 判定形態 (態)
-            status = "突破中" if current > s['lego_top'] else ("破位" if current < s['lego_base'] else "疊磚中")
-            results.append({
-                "代碼": s['id'], "名稱": s['name'], "實時價": current, 
-                "方塊底部": s['lego_base'], "狀態": status, "更新": datetime.now().strftime('%H:%M:%S')
-            })
-    return pd.DataFrame(results)
+# 2. 呈現部署看板
+st.subheader(f"📅 明日部署建議 ({datetime.now().strftime('%Y-%m-%d')})")
 
-# 4. 畫面呈現
-col1, col2 = st.columns([1, 1])
+stocks = [('02513', '智譜 AI'), ('00100', 'MiniMax-W')]
+cols = st.columns(2)
 
-with col1:
-    st.subheader("📊 實時勢位監控")
-    df = load_dashboard()
-    if not df.empty:
-        # 使用 map 取代 applymap 避免報錯
-        st.dataframe(df.style.map(lambda x: 'color: #2ecc71' if x == "突破中" else ('color: #ff4d4d' if x == "破位" else 'color: #f1c40f'), subset=['狀態']))
-    else:
-        st.warning("等待開市數據流入...")
+for i, (tid, name) in enumerate(stocks):
+    with cols[i]:
+        res = get_full_analysis(tid)
+        if res:
+            st.metric(f"{name} ({tid})", f"${res['現價']}", delta=f"{res['狀態']}")
+            st.write(f"🧱 **LEGO 方塊區間：** ${res['LEGO方塊底']} - ${res['LEGO方塊頂']}")
+            st.write(f"🛡️ **明日部署：** 若守住 ${res['關鍵支撐']} 則繼續持貨，跌破則減倉。")
+            
+            # 進度條顯示現價在方塊中的位置
+            progress = (res['現價'] - res['LEGO方塊底']) / (res['LEGO方塊頂'] - res['LEGO方塊底'])
+            st.progress(min(max(progress, 0.0), 1.0), text="方塊位置")
+        else:
+            st.error(f"無法加載 {name} 數據")
 
-with col2:
-    st.subheader("🔮 玄學與算力提示")
-    st.info("💡 提示：明早 09:30 HKT 智譜若守住 $764，火金磁場轉強，有利疊磚上行。")
-
-# 自動刷新按鈕
-if st.button('🔄 手動刷新數據'):
-    st.rerun()
+st.markdown("---")
+st.info("☀️ **算力提醒：** 收市後數據已固化。目前 2513 (智譜) 正處於能量回測期，若明日低開不破 764，則是『陽氣回升』之兆。")
