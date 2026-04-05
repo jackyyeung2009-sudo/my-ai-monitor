@@ -4,7 +4,7 @@ import yfinance as yf
 import plotly.graph_objects as go
 from datetime import datetime
 
-# 1. 頁面初始化與視覺樣式
+# 1. 頁面初始化與樣式注入
 st.set_page_config(page_title="Sky Sir 終極指揮部", layout="wide")
 
 st.markdown("""
@@ -32,7 +32,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. 數據庫持久化 (初始化預設數據)
+# 2. 數據庫持久化與防禦性初始化
 if 'full_db' not in st.session_state:
     st.session_state.full_db = {
         'AI 核心 (主力)': {
@@ -47,11 +47,12 @@ if 'full_db' not in st.session_state:
 
 if 'step' not in st.session_state: st.session_state.step = 'L1'
 if 'focus_sector' not in st.session_state: st.session_state.focus_sector = None
+if 'focus_stock_id' not in st.session_state: st.session_state.focus_stock_id = None
 
-# 3. 側邊欄：【動態矩陣管理面板】
+# 3. 側邊欄控制台
 st.sidebar.title("🛠️ 指揮部控制台")
 
-# --- 板塊管理 ---
+# --- 板塊管理 (帶安全檢查) ---
 with st.sidebar.expander("📁 板塊管理", expanded=True):
     new_sec_name = st.text_input("新增板塊名稱:")
     if st.button("➕ 建立新板塊"):
@@ -59,40 +60,45 @@ with st.sidebar.expander("📁 板塊管理", expanded=True):
             st.session_state.full_db[new_sec_name] = {}
             st.success(f"板塊 {new_sec_name} 已建立")
     
-    del_sec_name = st.selectbox("刪除板塊:", ["-- 選擇 --"] + list(st.session_state.full_db.keys()))
-    if st.button("🗑️ 刪除該板塊"):
-        if del_sec_name != "-- 選擇 --":
-            del st.session_state.full_db[del_sec_name]
-            st.session_state.step = 'L1'
-            st.rerun()
-
-# --- 股票管理 ---
-with st.sidebar.expander("📈 股票管理", expanded=True):
-    target_sec = st.selectbox("目標板塊:", list(st.session_state.full_db.keys()))
-    add_id = st.text_input("新增股票代碼 (5位):")
-    if st.button("➕ 加入該板塊"):
-        if add_id and target_sec:
-            clean_id = add_id.zfill(5)
-            st.session_state.full_db[target_sec][clean_id] = {
-                'name': f"個股 {clean_id}", 'flow': 0.0, 'meta': '主動偵察', 'base': 100.0, 'top': 110.0
-            }
-            st.success(f"{clean_id} 已加入 {target_sec}")
-
-    if st.session_state.full_db[target_sec]:
-        del_stk_id = st.selectbox("刪除股票:", ["-- 選擇 --"] + list(st.session_state.full_db[target_sec].keys()))
-        if st.button("🗑️ 移除該股票"):
-            if del_stk_id != "-- 選擇 --":
-                del st.session_state.full_db[target_sec][del_stk_id]
+    if st.session_state.full_db:
+        del_sec_name = st.selectbox("刪除板塊:", ["-- 選擇 --"] + list(st.session_state.full_db.keys()))
+        if st.button("🗑️ 刪除該板塊"):
+            if del_sec_name != "-- 選擇 --":
+                del st.session_state.full_db[del_sec_name]
+                st.session_state.step = 'L1' # 強制回首頁防止 KeyError
                 st.rerun()
 
-if st.sidebar.button("🏠 回到首頁"):
+# --- 股票管理 (帶安全檢查) ---
+with st.sidebar.expander("📈 股票管理", expanded=True):
+    if st.session_state.full_db:
+        target_sec = st.selectbox("目標板塊:", list(st.session_state.full_db.keys()))
+        add_id = st.text_input("新增股票代碼 (5位):")
+        if st.button("➕ 加入該板塊"):
+            if add_id and target_sec:
+                clean_id = add_id.zfill(5)
+                st.session_state.full_db[target_sec][clean_id] = {
+                    'name': f"個股 {clean_id}", 'flow': 0.0, 'meta': '主動偵察', 'base': 100.0, 'top': 110.0
+                }
+                st.success(f"{clean_id} 已加入 {target_sec}")
+
+        current_stocks = st.session_state.full_db.get(target_sec, {})
+        if current_stocks:
+            del_stk_id = st.selectbox("刪除股票:", ["-- 選擇 --"] + list(current_stocks.keys()))
+            if st.button("🗑️ 移除該股票"):
+                if del_stk_id != "-- 選擇 --":
+                    del st.session_state.full_db[target_sec][del_stk_id]
+                    st.session_state.step = 'L2' # 回到清單頁
+                    st.rerun()
+
+if st.sidebar.button("🏠 回到總覽首頁"):
     st.session_state.step = 'L1'
     st.rerun()
 
-# 4. 主介面邏輯
+# 4. 主介面邏輯 (穿透式分析)
+
 # --- 第一層：板塊總覽 (L1) ---
 if st.session_state.step == 'L1':
-    st.markdown("### 📊 勢位態：全球算力監控矩陣")
+    st.markdown("### 📊 勢位態：穿透式資金監控矩陣")
     if not st.session_state.full_db:
         st.info("目前無板塊數據，請從側邊欄新增。")
     else:
@@ -108,7 +114,7 @@ if st.session_state.step == 'L1':
                         <p style="font-size:0.8em; color:#888;">成員數: {len(stocks)}</p>
                     </div>
                 """, unsafe_allow_html=True)
-                if st.button(f"穿透分析", key=f"go_{name}"):
+                if st.button(f"進入 {name} 分析", key=f"go_{name}"):
                     st.session_state.focus_sector = name
                     st.session_state.step = 'L2'
                     st.rerun()
@@ -116,49 +122,73 @@ if st.session_state.step == 'L1':
 # --- 第二層：個股清單 (L2) ---
 elif st.session_state.step == 'L2':
     sec = st.session_state.focus_sector
-    st.markdown(f"### 🔍 {sec} - 實時資金排行")
+    if sec not in st.session_state.full_db: # 安全檢查
+        st.session_state.step = 'L1'
+        st.rerun()
+    
+    st.markdown(f"### 🔍 {sec} - 資金分佈排行")
     stocks = st.session_state.full_db[sec]
     
-    for sid, sinfo in stocks.items():
-        col1, col2, col3 = st.columns([3, 2, 1])
-        with col1:
-            st.markdown(f"<span class='meta-tag'>{sinfo['meta']}</span> **{sinfo['name']} ({sid})**", unsafe_allow_html=True)
-        with col2:
-            f_c = "inflow" if sinfo['flow'] >= 0 else "outflow"
-            st.markdown(f"<span class='{f_c}'>{sinfo['flow']:+.2f} 億</span>", unsafe_allow_html=True)
-        with col3:
-            if st.button("LEGO 分析", key=f"lego_{sid}"):
-                st.session_state.focus_stock = {**sinfo, 'id': sid}
-                st.session_state.step = 'L3'
-                st.rerun()
+    if not stocks:
+        st.warning("此板塊暫無股票，請從側邊欄加入。")
+    else:
+        for sid, sinfo in stocks.items():
+            col1, col2, col3 = st.columns([3, 2, 1])
+            with col1:
+                st.markdown(f"<span class='meta-tag'>{sinfo['meta']}</span> **{sinfo['name']} ({sid})**", unsafe_allow_html=True)
+            with col2:
+                f_c = "inflow" if sinfo['flow'] >= 0 else "outflow"
+                st.markdown(f"<span class='{f_c}'>{sinfo['flow']:+.2f} 億</span>", unsafe_allow_html=True)
+            with col3:
+                if st.button("LEGO 分析", key=f"lego_{sid}"):
+                    st.session_state.focus_stock_id = sid
+                    st.session_state.step = 'L3'
+                    st.rerun()
 
 # --- 第三層：LEGO 分析 (L3) ---
 elif st.session_state.step == 'L3':
-    s = st.session_state.focus_stock
-    st.markdown(f"### 🧱 {s['name']} ({s['id']}) - LEGO 視覺化")
+    sec = st.session_state.focus_sector
+    sid = st.session_state.focus_stock_id
+    
+    # 【關鍵安全檢查】防止 KeyError
+    if sec not in st.session_state.full_db or sid not in st.session_state.full_db[sec]:
+        st.session_state.step = 'L2'
+        st.rerun()
+        
+    s = st.session_state.full_db[sec][sid]
+    st.markdown(f"### 🧱 {s['name']} ({sid}) - LEGO 視覺部署")
     
     c1, c2 = st.columns(2)
-    with c1: s['base'] = st.number_input("LEGO 方塊底", value=float(s['base']))
-    with c2: s['top'] = st.number_input("LEGO 方塊頂", value=float(s['top']))
+    with c1: 
+        new_base = st.number_input("LEGO 方塊底", value=float(s['base']))
+    with c2: 
+        new_top = st.number_input("LEGO 方塊頂", value=float(s['top']))
     
-    # 更新回數據庫
-    st.session_state.full_db[st.session_state.focus_sector][s['id']].update({'base': s['base'], 'top': s['top']})
+    # 實時保存調整後的 LEGO 位
+    st.session_state.full_db[sec][sid].update({'base': new_base, 'top': new_top})
 
     try:
-        yf_code = f"{s['id'].lstrip('0')}.HK"
+        yf_code = f"{sid.lstrip('0')}.HK"
         df = yf.download(yf_code, period="1mo", interval="1d", progress=False)
-        if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
         
         fig = go.Figure(data=[go.Candlestick(
             x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'],
             increasing_line_color='#ff4d4d', decreasing_line_color='#2ecc71', name="日綫"
         )])
-        fig.add_shape(type="rect", x0=df.index[-10], y0=s['base'], x1=df.index[-1], y1=s['top'],
-                      fillcolor="Yellow", opacity=0.15, line=dict(color="Gold", width=2))
+        
+        # 繪製 LEGO 方塊 (看過去 10 天)
+        fig.add_shape(type="rect",
+            x0=df.index[-10], y0=new_base, x1=df.index[-1], y1=new_top,
+            fillcolor="Yellow", opacity=0.15, line=dict(color="Gold", width=2)
+        )
+        
         fig.update_layout(template="plotly_dark", xaxis_rangeslider_visible=False, height=600)
         st.plotly_chart(fig, use_container_width=True)
         
         curr = float(df['Close'].iloc[-1])
-        st.subheader(f"判定：{'🚀 突破' if curr > s['top'] else ('📉 破位' if curr < s['base'] else '🧱 疊磚')}")
+        status = "🚀 突破" if curr > new_top else ("📉 破位" if curr < new_base else "🧱 疊磚")
+        st.subheader(f"判定：{status} (現價: ${curr:.2f})")
     except:
-        st.error("⚠️ 雲端數據受限，請參考 AASTOCKS 手動核對。")
+        st.error("⚠️ 雲端數據抓取頻率受限，圖表暫時無法顯示。請根據 AASTOCKS 手動核對方塊位。")
