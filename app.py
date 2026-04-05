@@ -4,88 +4,94 @@ import yfinance as yf
 import plotly.graph_objects as go
 from datetime import datetime
 
-# 1. 頁面初始化
-st.set_page_config(page_title="Sky Sir 算力中心", layout="wide")
+# 1. 頁面初始化與樣式注入
+st.set_page_config(page_title="Sky Sir 核心終端", layout="wide")
 
-# 樣式注入：讓首頁卡片回歸 HTML 質魂
 st.markdown("""
     <style>
     .sector-card {
-        background-color: #1e1e1e;
-        border-radius: 15px;
-        padding: 25px;
-        margin-bottom: 20px;
+        background-color: #1a1a1a;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 15px;
         border: 1px solid #ffd70033;
-        transition: all 0.3s ease;
+        transition: 0.3s;
     }
-    .sector-card:hover {
-        border-color: #ffd700;
-        background-color: #252525;
-        transform: translateY(-5px);
-    }
-    .inflow { color: #ff4d4d !important; font-weight: bold; font-size: 1.6em; }
-    .outflow { color: #2ecc71 !important; font-weight: bold; font-size: 1.6em; }
+    .sector-card:hover { border-color: #ffd700; background-color: #222; }
+    .inflow { color: #ff4d4d !important; font-weight: bold; }
+    .outflow { color: #2ecc71 !important; font-weight: bold; }
     .meta-tag {
-        font-size: 0.8em;
+        font-size: 0.75em;
         background: #ffd70022;
-        padding: 4px 10px;
-        border-radius: 6px;
+        padding: 3px 8px;
+        border-radius: 4px;
         color: #ffd700;
-        border: 1px solid #ffd700;
-        margin-bottom: 10px;
-        display: inline-block;
+        border: 0.5px solid #ffd700;
+        margin-right: 8px;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. 核心數據庫
-SECTOR_DB = {
-    'ATMXJ (科網龍頭)': {'flow': -12.5, 'meta': '資金撤離', 'icon': '🌐'},
-    '中特估 (高息權重)': {'flow': 18.2, 'meta': '土生金能量', 'icon': '🏦'},
-    '新能源 (趨勢題材)': {'flow': 21.8, 'meta': '庚金利刃', 'icon': '⚡'},
-    '資源/黃金 (對沖)': {'flow': 4.9, 'meta': '金氣衝天', 'icon': '🏆'}
-}
+# 2. 核心數據初始化 (Session State)
+if 'watchlist' not in st.session_state:
+    st.session_state.watchlist = {
+        '02513': {'name': '智譜 AI', 'flow': 8.5, 'meta': '算力新星', 'base': 760.0, 'top': 850.0},
+        '00100': {'name': 'MiniMax-W', 'flow': 12.2, 'meta': '金氣匯聚', 'base': 920.0, 'top': 980.0}
+    }
 
-STOCK_DETAILS = {
-    'ATMXJ (科網龍頭)': [
-        {'id': '01810', 'name': '小米集團', 'flow': 11.15, 'meta': '木旺帶火', 'base': 18.2, 'top': 21.5},
-        {'id': '03690', 'name': '美團', 'flow': 2.45, 'meta': '震盪守位', 'base': 95.0, 'top': 112.0},
-        {'id': '00700', 'name': '騰訊控股', 'flow': -1.80, 'meta': '回調修正', 'base': 300.0, 'top': 335.0}
-    ],
-    '新能源 (趨勢題材)': [
-        {'id': '00175', 'name': '吉利汽車', 'flow': 21.75, 'meta': '氣場爆發', 'base': 8.5, 'top': 10.2},
-        {'id': '01211', 'name': '比亞迪', 'flow': 4.12, 'meta': '趨勢向上', 'base': 195.0, 'top': 225.0}
-    ]
-    # 其他板塊可按需補充...
-}
-
-# 3. 導航狀態管理
 if 'step' not in st.session_state: st.session_state.step = 'L1'
 if 'focus_sector' not in st.session_state: st.session_state.focus_sector = None
 if 'focus_stock' not in st.session_state: st.session_state.focus_stock = None
 
+# 3. 側邊欄：【功能回歸 - 新增股票】
+st.sidebar.title("🛠️ 算力控制台")
+st.sidebar.markdown("---")
+new_id = st.sidebar.text_input("輸入港股代碼 (如 00700):", key="new_stock_input")
+
+if st.sidebar.button("➕ 加入觀察名單"):
+    if new_id:
+        clean_id = new_id.zfill(5)
+        st.session_state.watchlist[clean_id] = {
+            'name': f"自選 {clean_id}", 'flow': 0.0, 'meta': '手動偵察', 
+            'base': 100.0, 'top': 110.0 # 預設方塊，進入 Level 3 可調整
+        }
+        st.sidebar.success(f"{clean_id} 已加入自選板塊")
+
+# 重置導航
+if st.sidebar.button("🏠 回到總覽"):
+    st.session_state.step = 'L1'
+    st.rerun()
+
+# 4. 數據定義 (對齊 HTML 板塊)
+SECTOR_DB = {
+    '自選觀察 (主力)': st.session_state.watchlist,
+    '新能源 (趨勢題材)': {
+        '00175': {'name': '吉利汽車', 'flow': 21.75, 'meta': '氣場爆發', 'base': 8.5, 'top': 10.2},
+        '01211': {'name': '比亞迪', 'flow': 4.12, 'meta': '趨勢向上', 'base': 195.0, 'top': 225.0}
+    },
+    'ATMXJ (科網龍頭)': {
+        '01810': {'name': '小米集團', 'flow': 11.15, 'meta': '木旺帶火', 'base': 18.2, 'top': 21.5},
+        '00700': {'name': '騰訊控股', 'flow': -1.80, 'meta': '回調修正', 'base': 300.0, 'top': 335.0}
+    }
+}
+
 # --- 第一層：板塊總覽 (L1) ---
 if st.session_state.step == 'L1':
-    st.markdown("## 📊 張士佳風格：板塊穿透分析盤")
-    st.caption("資料日期：2026-04-03 Close | AEST 01:40 對齊")
-    
-    cols = st.columns(2)
-    for i, (name, info) in enumerate(SECTOR_DB.items()):
-        with cols[i % 2]:
-            f_val = info['flow']
-            f_class = "inflow" if f_val > 0 else "outflow"
-            f_sign = "+" if f_val > 0 else ""
+    st.markdown("### 📊 天人合一：板塊穿透看板")
+    cols = st.columns(len(SECTOR_DB))
+    for i, (name, stocks) in enumerate(SECTOR_DB.items()):
+        with cols[i]:
+            total_flow = sum(s['flow'] for s in stocks.values())
+            f_class = "inflow" if total_flow >= 0 else "outflow"
             
-            # 渲染卡片
             st.markdown(f"""
                 <div class="sector-card">
-                    <div class="meta-tag">{info['meta']}</div>
-                    <h3 style="margin:0; color:white;">{info['icon']} {name}</h3>
-                    <p class="{f_class}">{f_sign}{f_val} 億</p>
+                    <h4 style="margin:0;">{name}</h4>
+                    <p class="{f_class}" style="font-size:1.4em; margin:10px 0;">{total_flow:+.1f} 億</p>
                 </div>
             """, unsafe_allow_html=True)
             
-            if st.button(f"進入 {name} 分佈", key=f"btn_{name}"):
+            if st.button(f"查看明細", key=f"go_{name}"):
                 st.session_state.focus_sector = name
                 st.session_state.step = 'L2'
                 st.rerun()
@@ -93,36 +99,33 @@ if st.session_state.step == 'L1':
 # --- 第二層：個股清單 (L2) ---
 elif st.session_state.step == 'L2':
     sec = st.session_state.focus_sector
-    st.markdown(f"### 🔍 {sec} - 資金分佈明細")
-    if st.button("⬅️ 返回首頁"):
-        st.session_state.step = 'L1'
-        st.rerun()
+    st.markdown(f"### 🔍 {sec} - 資金排行")
+    
+    stocks = SECTOR_DB[sec]
+    for sid, sinfo in stocks.items():
+        f_c = "inflow" if sinfo['flow'] >= 0 else "outflow"
+        col1, col2, col3 = st.columns([3, 2, 1])
+        with col1:
+            st.markdown(f"<span class='meta-tag'>{sinfo['meta']}</span> **{sinfo['name']} ({sid})**", unsafe_allow_html=True)
+        with col2:
+            st.markdown(f"<span class='{f_c}'>{sinfo['flow']:+.2f} 億</span>", unsafe_allow_html=True)
+        with col3:
+            if st.button("LEGO 分析", key=f"lego_{sid}"):
+                # 將個股數據傳入 L3
+                sinfo['id'] = sid
+                st.session_state.focus_stock = sinfo
+                st.session_state.step = 'L3'
+                st.rerun()
 
-    stocks = STOCK_DETAILS.get(sec, [])
-    if not stocks:
-        st.info("該板塊暫無詳細個股數據。")
-    else:
-        for s in stocks:
-            f_c = "inflow" if s['flow'] > 0 else "outflow"
-            f_s = "+" if s['flow'] > 0 else ""
-            col1, col2, col3 = st.columns([3, 2, 1])
-            with col1:
-                st.markdown(f"<span class='meta-tag'>{s['meta']}</span> **{s['name']} ({s['id']})**", unsafe_allow_html=True)
-            with col2:
-                st.markdown(f"<span class='{f_c}'>{f_s}{s['flow']} 億</span>", unsafe_allow_html=True)
-            with col3:
-                if st.button("LEGO 分析", key=f"lego_{s['id']}"):
-                    st.session_state.focus_stock = s
-                    st.session_state.step = 'L3'
-                    st.rerun()
-
-# --- 第三層：LEGO 分析 (L3) ---
+# --- 第三層：LEGO 陰陽燭分析 (L3) ---
 elif st.session_state.step == 'L3':
     s = st.session_state.focus_stock
     st.markdown(f"### 🧱 {s['name']} ({s['id']}) - LEGO 視覺部署")
-    if st.button("⬅️ 返回列表"):
-        st.session_state.step = 'L2'
-        st.rerun()
+    
+    # 允許調整方塊
+    c1, c2 = st.columns(2)
+    with c1: s['base'] = st.number_input("LEGO 方塊底", value=float(s['base']))
+    with c2: s['top'] = st.number_input("LEGO 方塊頂", value=float(s['top']))
 
     try:
         yf_code = f"{s['id'].lstrip('0')}.HK"
@@ -139,8 +142,6 @@ elif st.session_state.step == 'L3':
         st.plotly_chart(fig, use_container_width=True)
         
         curr = float(df['Close'].iloc[-1])
-        status = "🚀 突破" if curr > s['top'] else ("📉 破位" if curr < s['base'] else "🧱 疊磚")
-        st.subheader(f"判定：{status}")
-        st.write(f"LEGO 區間：${s['base']} - ${s['top']} | 現價：${curr:.2f}")
+        st.subheader(f"判定：{'🚀 突破' if curr > s['top'] else ('📉 破位' if curr < s['base'] else '🧱 疊磚')}")
     except:
-        st.error("⚠️ 雲端數據連線受限，請參考 AASTOCKS 手動核對。")
+        st.error("⚠️ 雲端數據受限，請參考 AASTOCKS 手動核對。")
