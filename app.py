@@ -1,97 +1,115 @@
 import streamlit as st
 import pandas as pd
 import yfinance as yf
-import requests
-from bs4 import BeautifulSoup
-from datetime import datetime
 import plotly.graph_objects as go
+from datetime import datetime
 
-# 1. 頁面配置
-st.set_page_config(page_title="AI 勢位態終端 - 終極版", layout="wide")
-st.title("🛡️ 港股 AI 雙雄：突破封鎖全功能站")
+# 1. 初始化與數據定義 (對齊 HTML 數據)
+st.set_page_config(page_title="Sky Sir 核心監控", layout="wide")
 
-# 2. 緩存清單管理
-if 'watchlist' not in st.session_state:
-    st.session_state.watchlist = {
-        '02513': {'name': '智譜 AI', 'base': 760.0, 'top': 850.0},
-        '00100': {'name': 'MiniMax-W', 'base': 920.0, 'top': 980.0}
-    }
+# 模擬從 HTML 提取的數據庫
+SECTOR_DATA = {
+    'ATMXJ (科網)': {'flow': -12.50, 'meta': '資金撤離', 'stocks': [
+        {'id': '01810', 'name': '小米', 'flow': 11.15, 'meta': '木旺帶火', 'base': 18.2, 'top': 21.5},
+        {'id': '03690', 'name': '美團', 'flow': 2.45, 'meta': '震盪守位', 'base': 95.0, 'top': 112.0},
+        {'id': '09988', 'name': '阿里', 'flow': -2.49, 'meta': '資金緩流', 'base': 68.0, 'top': 75.0},
+        {'id': '00700', 'name': '騰訊', 'flow': -1.80, 'meta': '回調修正', 'base': 300.0, 'top': 335.0}
+    ]},
+    '中特估 (高息)': {'flow': 18.22, 'meta': '土生金能量', 'stocks': [
+        {'id': '00939', 'name': '建行', 'flow': 8.40, 'meta': '穩健護盤', 'base': 4.8, 'top': 5.4},
+        {'id': '01398', 'name': '工行', 'flow': 3.20, 'meta': '穩定防守', 'base': 4.0, 'top': 4.6},
+        {'id': '00883', 'name': '中海油', 'flow': -7.34, 'meta': '火旺制金', 'base': 17.5, 'top': 19.8}
+    ]},
+    '新能源 (汽車)': {'flow': 21.75, 'meta': '庚金利刃', 'stocks': [
+        {'id': '00175', 'name': '吉利', 'flow': 21.75, 'meta': '氣場爆發', 'base': 8.5, 'top': 10.2},
+        {'id': '01211', 'name': '比亞迪', 'flow': 4.12, 'meta': '趨勢向上', 'base': 195.0, 'top': 225.0}
+    ]},
+    '資源/黃金': {'flow': 4.90, 'meta': '金氣衝天', 'stocks': [
+        {'id': '02899', 'name': '紫金', 'flow': 2.10, 'meta': '對沖首選', 'base': 14.5, 'top': 17.2},
+        {'id': '01787', 'name': '山東黃金', 'flow': 1.25, 'meta': '避險資金', 'base': 15.8, 'top': 18.5}
+    ]}
+}
 
-# 3. 抓取引擎 (PLAN B 隱身模式)
-def fetch_stealth_price(ticker):
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+# 管理導航狀態
+if 'view_level' not in st.session_state: st.session_state.view_level = 'sector'
+if 'selected_sector' not in st.session_state: st.session_state.selected_sector = None
+if 'selected_stock' not in st.session_state: st.session_state.selected_stock = None
+
+# --- 介面邏輯 ---
+
+# 返回按鈕
+if st.session_state.view_level != 'sector':
+    if st.button("⬅️ 返回上級"):
+        if st.session_state.view_level == 'stock_detail':
+            st.session_state.view_level = 'stock_list'
+        else:
+            st.session_state.view_level = 'sector'
+        st.rerun()
+
+# 第一層：板塊總覽 (Level 1)
+if st.session_state.view_level == 'sector':
+    st.subheader("📊 核心板塊資金流向 (億港元)")
+    cols = st.columns(len(SECTOR_DATA))
+    for i, (name, info) in enumerate(SECTOR_DATA.items()):
+        with cols[i]:
+            color = "inverse" if info['flow'] < 0 else "normal"
+            if st.button(f"{name}\n{info['flow']}B"):
+                st.session_state.selected_sector = name
+                st.session_state.view_level = 'stock_list'
+                st.rerun()
+            st.caption(f"氣場：{info['meta']}")
+
+# 第二層：個股排行 (Level 2)
+elif st.session_state.view_level == 'stock_list':
+    sector_name = st.session_state.selected_sector
+    st.subheader(f"🔍 {sector_name} - 個股資金流向排行 (Top 5)")
+    
+    stocks = SECTOR_DATA[sector_name]['stocks']
+    # 按資金流降序排
+    sorted_stocks = sorted(stocks, key=lambda x: x['flow'], reverse=True)
+    
+    for s in sorted_stocks:
+        col_s1, col_s2, col_s3 = st.columns([2, 1, 1])
+        with col_s1:
+            st.write(f"**{s['name']} ({s['id']})**")
+            st.caption(f"玄學標籤：{s['meta']}")
+        with col_s2:
+            flow_color = "red" if s['flow'] > 0 else "green"
+            st.markdown(f":{flow_color}[{s['flow']:+.2f} 億]")
+        with col_s3:
+            if st.button("查看圖表分析", key=s['id']):
+                st.session_state.selected_stock = s
+                st.session_state.view_level = 'stock_detail'
+                st.rerun()
+
+# 第三層：LEGO 圖表分析 (Level 3)
+elif st.session_state.view_level == 'stock_detail':
+    s = st.session_state.selected_stock
+    st.subheader(f"🧱 {s['name']} ({s['id']}) - 勢位態視覺化")
+    
+    # 抓取日綫數據 (備援模式)
     try:
-        url = f"http://www.aastocks.com/tc/stocks/quote/detail-quote.aspx?symbol={ticker}"
-        r = requests.get(url, headers=headers, timeout=5)
-        soup = BeautifulSoup(r.text, 'html.parser')
-        price_tag = soup.find('span', {'class': 'last-price'}) or soup.find('div', {'class': 'lastPrice'})
-        if price_tag:
-            return float(price_tag.text.strip().replace(',', '')), "AASTOCKS 實時"
-        return None, "自動抓取被阻斷"
-    except:
-        return None, "連線超時"
-
-# 4. 側邊欄控制：【新增股票功能回歸】
-st.sidebar.title("🛠️ 算力指揮部")
-lookback = st.sidebar.slider("LEGO 觀察天數", 5, 20, 10)
-
-new_ticker = st.sidebar.text_input("輸入港股代碼新增 (如 00700):")
-if st.sidebar.button("➕ 加入監控清單"):
-    p, n = fetch_stealth_price(new_ticker)
-    init_p = p if p else 100.0
-    st.session_state.watchlist[new_ticker] = {
-        'name': f"個股 {new_ticker}", 
-        'base': init_p * 0.95, 'top': init_p * 1.05
-    }
-    st.sidebar.success(f"{new_ticker} 已就位")
-
-# 5. 主面板邏輯
-selected = st.selectbox("選擇監控個股", list(st.session_state.watchlist.keys()))
-conf = st.session_state.watchlist[selected]
-
-# 抓取數據
-live_p, source = fetch_stealth_price(selected)
-final_p = st.number_input(f"【{source}】現價確認 (失敗可手動修正)", value=float(live_p if live_p else 0.0))
-
-# 調整 LEGO 方塊
-c1, c2 = st.columns(2)
-with c1: new_base = st.number_input("LEGO 方塊底", value=float(conf['base']))
-with c2: new_top = st.number_input("LEGO 方塊頂", value=float(conf['top']))
-st.session_state.watchlist[selected].update({'base': new_base, 'top': new_top})
-
-# 6. 視覺化圖表：【確保圖表不消失】
-fig = go.Figure()
-
-# 嘗試抓取日綫，失敗則顯示基礎方塊
-try:
-    yf_code = f"{selected.lstrip('0')}.HK"
-    hist_df = yf.download(yf_code, period="1mo", interval="1d", progress=False)
-    if not hist_df.empty:
-        if isinstance(hist_df.columns, pd.MultiIndex):
-            hist_df.columns = hist_df.columns.get_level_values(0)
+        yf_code = f"{s['id'].lstrip('0')}.HK"
+        df = yf.download(yf_code, period="1mo", interval="1d", progress=False)
+        if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
         
-        # 加入陰陽燭
-        fig.add_trace(go.Candlestick(
-            x=hist_df.index, open=hist_df['Open'], high=hist_df['High'], low=hist_df['Low'], close=hist_df['Close'],
-            name="日綫", increasing_line_color='#ff4d4d', decreasing_line_color='#2ecc71'
-        ))
-        box_start = hist_df.index[-min(len(hist_df), lookback)]
-        box_end = hist_df.index[-1]
-    else:
-        raise Exception("YF 數據空")
-except:
-    # 備援圖表：只畫方塊與現價線
-    st.warning("🕯️ 陰陽燭抓取失敗，目前僅顯示 LEGO 格局判定圖。")
-    box_start, box_end = 0, 10
-    fig.add_trace(go.Scatter(x=[0, 10], y=[final_p, final_p], name="現價位置", line=dict(color="#00ffcc", width=4)))
-
-# 統一注入 LEGO 方塊 (態)
-fig.add_shape(type="rect", x0=box_start, y0=new_base, x1=box_end, y1=new_top,
-              fillcolor="Yellow", opacity=0.15, line=dict(color="Gold", width=2))
-
-fig.update_layout(template="plotly_dark", xaxis_rangeslider_visible=False, height=500, title=f"{conf['name']} - 勢位態分析")
-st.plotly_chart(fig, use_container_width=True)
-
-# 7. 判定
-status = "🚀 突破" if final_p > new_top else ("📉 破位" if final_p < new_base else "🧱 疊磚中")
-st.subheader(f"戰略判定：{status}")
+        fig = go.Figure(data=[go.Candlestick(
+            x=df.index, open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'],
+            increasing_line_color='#ff4d4d', decreasing_line_color='#2ecc71', name="日綫"
+        )])
+        
+        # 注入 LEGO 方塊 (態)
+        fig.add_shape(type="rect",
+            x0=df.index[-10], y0=s['base'], x1=df.index[-1], y1=s['top'],
+            fillcolor="Yellow", opacity=0.15, line=dict(color="Gold", width=2)
+        )
+        
+        fig.update_layout(template="plotly_dark", xaxis_rangeslider_visible=False, height=500)
+        st.plotly_chart(fig, use_container_width=True)
+        
+        current_p = float(df['Close'].iloc[-1])
+        status = "🚀 突破" if current_p > s['top'] else ("📉 破位" if current_p < s['base'] else "🧱 疊磚中")
+        st.metric("當前判定", status, delta=f"現價 ${current_p:.2f}")
+    except:
+        st.error("⚠️ 雲端數據暫時封鎖，請參考 aastock 手動對齊 LEGO 位。")
+        st.write(f"🧱 建議 LEGO 方塊：${s['base']} - ${s['top']}")
